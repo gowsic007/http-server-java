@@ -37,6 +37,7 @@ public class Main {
         // Writing the response
         String responseMessage = "HTTP/1.1 200 OK\r\n\r\n";
         outWriter.write(responseMessage.getBytes());
+        outWriter.flush();
         System.out.println("Response returned: " + responseMessage);
     }
 }
