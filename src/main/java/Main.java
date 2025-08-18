@@ -1,7 +1,8 @@
 import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -26,12 +27,12 @@ public class Main {
     }
 
     private static void processRequestResponse(Socket socket) throws IOException {
-        BufferedInputStream inReader = new BufferedInputStream(socket.getInputStream());
+        BufferedReader inReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
         OutputStream outWriter = socket.getOutputStream();
 
         // Reading the request
-        String requestMessage = inReader.readAllBytes().toString();
+        String requestMessage = inReader.readLine();
         System.out.println("Request message: " + requestMessage);
 
         // Writing the response
