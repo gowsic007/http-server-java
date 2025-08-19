@@ -42,7 +42,7 @@ public class Main {
 
         // Writing the response
         String responseMessage = "";
-        if (request.uri().getPath().isEmpty() || request.uri().getPath().equals("/index.html")) {
+        if (request.uri().getPath().equals("/") || request.uri().getPath().equals("/index.html")) {
             responseMessage = "HTTP/1.1 200 OK\r\n\r\n";
         } else {
             responseMessage = "HTTP/1.1 404 Not Found\r\n\r\n";
