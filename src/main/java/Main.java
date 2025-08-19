@@ -44,6 +44,10 @@ public class Main {
         String responseMessage = "";
         if (request.uri().getPath().equals("/") || request.uri().getPath().equals("/index.html")) {
             responseMessage = "HTTP/1.1 200 OK\r\n\r\n";
+        } else if (request.uri().getPath().startsWith("/echo")) {
+            String responseString = request.uri().getPath().split("/")[2];
+            int length = responseString.length();
+            responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "+length+"\r\n\r\n"+responseString;
         } else {
             responseMessage = "HTTP/1.1 404 Not Found\r\n\r\n";
         }
