@@ -1,5 +1,6 @@
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.ServerSocket;
@@ -9,6 +10,7 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient.Version;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.Builder;
+import java.util.stream.Collectors;
 
 public class Main {
 
@@ -31,13 +33,13 @@ public class Main {
     }
 
     private static void processRequestResponse(Socket socket) throws IOException, URISyntaxException {
-        BufferedReader inReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        // Reading the request
+        String requestMessage = readRequest(socket.getInputStream());
+        System.out.println("Request message: " + requestMessage);
 
+        // Setting the output stream
         OutputStream outWriter = socket.getOutputStream();
 
-        // Reading the request
-        String requestMessage = inReader.readLine();
-        System.out.println("Request message: " + requestMessage);
         HttpRequest request = parseRequest(socket, requestMessage);
 
         // Writing the response
@@ -48,6 +50,10 @@ public class Main {
             String responseString = request.uri().getPath().split("/")[2];
             int length = responseString.length();
             responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "+length+"\r\n\r\n"+responseString;
+        } else if (request.uri().getPath().startsWith("/user-agent")) {
+            System.out.println("User-Agent is: " + request.headers().map());
+            String userAgent = request.headers().firstValue("User-Agent").get();
+            responseMessage = getSuccessPrefix() + userAgent.length() + "\r\n\r\n" + userAgent;
         } else {
             responseMessage = "HTTP/1.1 404 Not Found\r\n\r\n";
         }
@@ -56,12 +62,27 @@ public class Main {
         System.out.println("Response returned: " + responseMessage);
     }
 
+    private static String readRequest(InputStream inputStream) throws IOException {
+        String requestLine = "";
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+        String line;
+        while ((line = reader.readLine()) != null && !line.isEmpty()) {
+            requestLine += line + "\r\n";
+        }
+
+        return requestLine;
+    }
+
+    private static String getSuccessPrefix() {
+        return "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ";
+    }
+
     private static HttpRequest parseRequest(Socket socket, String requestMessage) throws URISyntaxException {
         Builder httpRequestBuilder = HttpRequest.newBuilder();
         String[] requestArray = requestMessage.split("\r\n");
-        String[] hostDetailsArray =  requestArray[0].split(" ");
-        String methodName = hostDetailsArray[0];
-        String path = hostDetailsArray[1];
+        String[] requestDetailsArray =  requestArray[0].split(" ");
+        String methodName = requestDetailsArray[0];
+        String path = requestDetailsArray[1];
 
         switch (methodName) {
             case "GET":
@@ -74,7 +95,7 @@ public class Main {
         URI uri = new URI("http", null, socket.getInetAddress().getHostAddress(), -1, path, null, null);
         httpRequestBuilder.uri(uri);
 
-        String httpVersion = hostDetailsArray[2];
+        String httpVersion = requestDetailsArray[2];
         switch (httpVersion) {
             case "HTTP/1.1":
                 httpRequestBuilder.version(Version.HTTP_1_1);
@@ -85,6 +106,9 @@ public class Main {
 
         for(int i = 1; i < requestArray.length; i++) {
             String[] headerKV = requestArray[i].split(": ");
+            if(headerKV[0].equalsIgnoreCase("Host")) {
+                continue;
+            }
             httpRequestBuilder.setHeader(headerKV[0], headerKV[1]);
         }
 
