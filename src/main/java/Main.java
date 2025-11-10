@@ -22,17 +22,19 @@ public class Main {
             // Since the tester restarts your program quite often, setting SO_REUSEADDR
             // ensures that we don't run into 'Address already in use' errors
             serverSocket.setReuseAddress(true);
+            while (true) {
+                Socket socket = serverSocket.accept(); // Wait for connection from client.
+                System.out.println("Accepted new connection");
 
-            Socket socket = serverSocket.accept(); // Wait for connection from client.
-            System.out.println("Accepted new connection");
-
-            processRequestResponse(socket);
+                processRequestResponse(socket);
+            }
         } catch (IOException | URISyntaxException e) {
             System.out.println("Failed to Process request : " + e.getMessage());
         }
     }
 
     private static void processRequestResponse(Socket socket) throws IOException, URISyntaxException {
+        System.out.println("Processing request");
         // Reading the request
         String requestMessage = readRequest(socket.getInputStream());
         System.out.println("Request message: " + requestMessage);
