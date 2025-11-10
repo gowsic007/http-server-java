@@ -10,7 +10,6 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient.Version;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.Builder;
-import java.util.stream.Collectors;
 
 public class Main {
 
@@ -26,9 +25,16 @@ public class Main {
                 Socket socket = serverSocket.accept(); // Wait for connection from client.
                 System.out.println("Accepted new connection");
 
-                processRequestResponse(socket);
+                Thread thread = new Thread(() -> {
+                    try {
+                        processRequestResponse(socket);
+                    } catch (IOException | URISyntaxException e) {
+                        System.out.println("Failed to Process request : " + e.getMessage());
+                    }
+                });
+                thread.start();
             }
-        } catch (IOException | URISyntaxException e) {
+        } catch (IOException e) {
             System.out.println("Failed to Process request : " + e.getMessage());
         }
     }
