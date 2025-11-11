@@ -10,6 +10,8 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient.Version;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.Builder;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 public class Main {
 
@@ -27,7 +29,7 @@ public class Main {
 
                 Thread thread = new Thread(() -> {
                     try {
-                        processRequestResponse(socket);
+                        processRequestResponse(socket,args);
                     } catch (IOException | URISyntaxException e) {
                         System.out.println("Failed to Process request : " + e.getMessage());
                     }
@@ -39,7 +41,7 @@ public class Main {
         }
     }
 
-    private static void processRequestResponse(Socket socket) throws IOException, URISyntaxException {
+    private static void processRequestResponse(Socket socket, String[] args) throws IOException, URISyntaxException {
         System.out.println("Processing request");
         // Reading the request
         String requestMessage = readRequest(socket.getInputStream());
@@ -56,18 +58,28 @@ public class Main {
             responseMessage = "HTTP/1.1 200 OK\r\n\r\n";
         } else if (request.uri().getPath().startsWith("/echo")) {
             String responseString = request.uri().getPath().split("/")[2];
-            int length = responseString.length();
-            responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: "+length+"\r\n\r\n"+responseString;
+            responseMessage = getSuccessPrefix("text/plain") + responseString.length() + "\r\n\r\n" + responseString;
         } else if (request.uri().getPath().startsWith("/user-agent")) {
             System.out.println("User-Agent is: " + request.headers().map());
             String userAgent = request.headers().firstValue("User-Agent").get();
-            responseMessage = getSuccessPrefix() + userAgent.length() + "\r\n\r\n" + userAgent;
+            responseMessage = getSuccessPrefix("text/plain") + userAgent.length() + "\r\n\r\n" + userAgent;
+        } else if (request.uri().getPath().startsWith("/files")) {
+            responseMessage = handleFileRequestAndGetResponse(request.uri().getPath(), args);
         } else {
             responseMessage = "HTTP/1.1 404 Not Found\r\n\r\n";
         }
         outWriter.write(responseMessage.getBytes());
         outWriter.flush();
         System.out.println("Response returned: " + responseMessage);
+    }
+
+    private static String handleFileRequestAndGetResponse(String path, String[] args) {
+        String filePath = path.split("/")[2];
+        String content = readFileContent(args[1]+filePath);
+        if(content == null) {
+            return "HTTP/1.1 404 Not Found\r\n\r\n";
+        }
+        return getSuccessPrefix("application/octet-stream") + content.length() + "\r\n\r\n" + content;
     }
 
     private static String readRequest(InputStream inputStream) throws IOException {
@@ -81,14 +93,14 @@ public class Main {
         return requestLine;
     }
 
-    private static String getSuccessPrefix() {
-        return "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: ";
+    private static String getSuccessPrefix(String contentType) {
+        return "HTTP/1.1 200 OK\r\nContent-Type: " + contentType + "\r\nContent-Length: ";
     }
 
     private static HttpRequest parseRequest(Socket socket, String requestMessage) throws URISyntaxException {
         Builder httpRequestBuilder = HttpRequest.newBuilder();
         String[] requestArray = requestMessage.split("\r\n");
-        String[] requestDetailsArray =  requestArray[0].split(" ");
+        String[] requestDetailsArray = requestArray[0].split(" ");
         String methodName = requestDetailsArray[0];
         String path = requestDetailsArray[1];
 
@@ -112,14 +124,23 @@ public class Main {
                 throw new IllegalArgumentException("Unknown Http version: " + httpVersion);
         }
 
-        for(int i = 1; i < requestArray.length; i++) {
+        for (int i = 1; i < requestArray.length; i++) {
             String[] headerKV = requestArray[i].split(": ");
-            if(headerKV[0].equalsIgnoreCase("Host")) {
+            if (headerKV[0].equalsIgnoreCase("Host")) {
                 continue;
             }
             httpRequestBuilder.setHeader(headerKV[0], headerKV[1]);
         }
 
         return httpRequestBuilder.build();
+    }
+
+    private static String readFileContent(String file) {
+        try {
+            return new String(Files.readAllBytes(Paths.get(file)));
+        } catch (IOException e) {
+            System.out.println("Failed to read file: " + e.getMessage());
+            return null;
         }
+    }
 }
