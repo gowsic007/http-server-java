@@ -64,7 +64,7 @@ public class Main {
             String userAgent = request.headers().firstValue("User-Agent").get();
             responseMessage = getSuccessPrefix("text/plain") + userAgent.length() + "\r\n\r\n" + userAgent;
         } else if (request.uri().getPath().startsWith("/files")) {
-            responseMessage = handleFileRequestAndGetResponse(request.uri().getPath(), args);
+            responseMessage = handleFileRequestAndGetResponse(request, requestMessage, args);
         } else {
             responseMessage = "HTTP/1.1 404 Not Found\r\n\r\n";
         }
@@ -73,24 +73,55 @@ public class Main {
         System.out.println("Response returned: " + responseMessage);
     }
 
-    private static String handleFileRequestAndGetResponse(String path, String[] args) {
-        String filePath = path.split("/")[2];
-        String content = readFileContent(args[1]+filePath);
-        if(content == null) {
-            return "HTTP/1.1 404 Not Found\r\n\r\n";
+    private static String handleFileRequestAndGetResponse(HttpRequest request, String requestMessage, String[] args) {
+        String filePath = args[1] + request.uri().getPath().split("/")[2];
+        if(request.method().equals("GET")) {
+            String content = readFileContent(filePath);
+            if (content == null) {
+                return "HTTP/1.1 404 Not Found\r\n\r\n";
+            }
+            return getSuccessPrefix("application/octet-stream") + content.length() + "\r\n\r\n" + content;
+        } else if(request.method().equals("POST")) {
+            String[] requestMessageArray = requestMessage.split("\r\n\r\n");
+            String content = requestMessageArray[1];
+            if (content == null) {
+                return "HTTP/1.1 404 Not Found\r\n\r\n";
+            }
+            writeFileContent(filePath, content);
+            return "HTTP/1.1 201 Created\r\n\r\n";
         }
-        return getSuccessPrefix("application/octet-stream") + content.length() + "\r\n\r\n" + content;
+        return "HTTP/1.1 404 Not Found\r\n\r\n";
+    }
+
+    private static void writeFileContent(String filePath, String content) {
+        try {
+            Files.write(Paths.get(filePath), content.getBytes());
+        } catch (IOException e) {
+            System.out.println("Failed to write file: " + e.getMessage());
+        }
     }
 
     private static String readRequest(InputStream inputStream) throws IOException {
-        String requestLine = "";
+        StringBuilder requestLine = new StringBuilder();
+        int contentLength = 0;
         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
         String line;
         while ((line = reader.readLine()) != null && !line.isEmpty()) {
-            requestLine += line + "\r\n";
+            requestLine.append(line).append("\r\n");
+            // Look for Content-Length header to know how much body to read
+            if (line.startsWith("Content-Length:")) {
+                contentLength = Integer.parseInt(line.split(": ")[1]);
+            }
+        }
+        requestLine.append("\r\n");
+
+        if (contentLength > 0) {
+            char[] body = new char[contentLength];  // Create buffer of exact size
+            reader.read(body, 0, contentLength);     // Read exactly contentLength characters
+            requestLine.append(body);                    // Add body to request string
         }
 
-        return requestLine;
+        return requestLine.toString();
     }
 
     private static String getSuccessPrefix(String contentType) {
@@ -99,7 +130,8 @@ public class Main {
 
     private static HttpRequest parseRequest(Socket socket, String requestMessage) throws URISyntaxException {
         Builder httpRequestBuilder = HttpRequest.newBuilder();
-        String[] requestArray = requestMessage.split("\r\n");
+        String requestMessageWOBody = requestMessage.split("\r\n\r\n")[0];
+        String[] requestArray = requestMessageWOBody.split("\r\n");
         String[] requestDetailsArray = requestArray[0].split(" ");
         String methodName = requestDetailsArray[0];
         String path = requestDetailsArray[1];
@@ -107,6 +139,9 @@ public class Main {
         switch (methodName) {
             case "GET":
                 httpRequestBuilder.GET();
+                break;
+            case "POST":
+                httpRequestBuilder.POST(HttpRequest.BodyPublishers.ofString(requestArray[requestArray.length-1]));
                 break;
             default:
                 throw new IllegalArgumentException("Unknown method name: " + methodName);
@@ -126,7 +161,7 @@ public class Main {
 
         for (int i = 1; i < requestArray.length; i++) {
             String[] headerKV = requestArray[i].split(": ");
-            if (headerKV[0].equalsIgnoreCase("Host")) {
+            if (headerKV[0].equalsIgnoreCase("Host") || headerKV[0].equalsIgnoreCase("Content-Length")) {
                 continue;
             }
             httpRequestBuilder.setHeader(headerKV[0], headerKV[1]);
