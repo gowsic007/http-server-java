@@ -57,8 +57,13 @@ public class Main {
         if (request.uri().getPath().equals("/") || request.uri().getPath().equals("/index.html")) {
             responseMessage = "HTTP/1.1 200 OK\r\n\r\n";
         } else if (request.uri().getPath().startsWith("/echo")) {
-            String responseString = request.uri().getPath().split("/")[2];
-            responseMessage = getSuccessPrefix("text/plain") + responseString.length() + "\r\n\r\n" + responseString;
+            if(request.headers().firstValue("Accept-Encoding").isPresent() && "gzip".equalsIgnoreCase(request.headers().firstValue("Accept-Encoding").get())) {
+                responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\n\r\n";
+            } else {
+                String responseString = request.uri().getPath().split("/")[2];
+                responseMessage =
+                    getSuccessPrefix("text/plain") + responseString.length() + "\r\n\r\n" + responseString;
+            }
         } else if (request.uri().getPath().startsWith("/user-agent")) {
             System.out.println("User-Agent is: " + request.headers().map());
             String userAgent = request.headers().firstValue("User-Agent").get();
