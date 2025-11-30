@@ -12,6 +12,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.Builder;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class Main {
 
@@ -57,9 +61,17 @@ public class Main {
         if (request.uri().getPath().equals("/") || request.uri().getPath().equals("/index.html")) {
             responseMessage = "HTTP/1.1 200 OK\r\n\r\n";
         } else if (request.uri().getPath().startsWith("/echo")) {
-            if(request.headers().firstValue("Accept-Encoding").isPresent() && "gzip".equalsIgnoreCase(request.headers().firstValue("Accept-Encoding").get())) {
-                responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\n\r\n";
-            } else {
+            boolean isResponseConstructed = false;
+            if (request.headers().firstValue("Accept-Encoding").isPresent() && !isResponseConstructed) {
+                Set<String> acceptEncoding = Arrays.stream(
+                        request.headers().firstValue("Accept-Encoding").get().split(","))
+                    .map(encodeType -> encodeType.trim()).collect(Collectors.toSet());
+                if (acceptEncoding.contains("gzip")) {
+                    responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\n\r\n";
+                    isResponseConstructed = true;
+                }
+            }
+            if (!isResponseConstructed) {
                 String responseString = request.uri().getPath().split("/")[2];
                 responseMessage =
                     getSuccessPrefix("text/plain") + responseString.length() + "\r\n\r\n" + responseString;
