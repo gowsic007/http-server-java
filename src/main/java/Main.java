@@ -67,7 +67,12 @@ public class Main {
                         request.headers().firstValue("Accept-Encoding").get().split(","))
                     .map(encodeType -> encodeType.trim()).collect(Collectors.toSet());
                 if (acceptEncoding.contains("gzip")) {
-                    responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\n\r\n";
+                    String responseString = request.uri().getPath().split("/")[2];
+                    if(responseString != null) {
+                        responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\n\r\n" + responseString.length() + "\r\n\r\n" + responseString;
+                    } else {
+                        responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\n\r\n";
+                    }
                     isResponseConstructed = true;
                 }
             }
