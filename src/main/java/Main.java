@@ -1,4 +1,5 @@
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -10,12 +11,15 @@ import java.net.URISyntaxException;
 import java.net.http.HttpClient.Version;
 import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.Builder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.zip.GZIPOutputStream;
 
 public class Main {
 
@@ -58,6 +62,7 @@ public class Main {
 
         // Writing the response
         String responseMessage = "";
+        boolean isResponded = false;
         if (request.uri().getPath().equals("/") || request.uri().getPath().equals("/index.html")) {
             responseMessage = "HTTP/1.1 200 OK\r\n\r\n";
         } else if (request.uri().getPath().startsWith("/echo")) {
@@ -67,13 +72,15 @@ public class Main {
                         request.headers().firstValue("Accept-Encoding").get().split(","))
                     .map(encodeType -> encodeType.trim()).collect(Collectors.toSet());
                 if (acceptEncoding.contains("gzip")) {
-                    String responseString = request.uri().getPath().split("/")[2];
-                    if(responseString != null) {
-                        responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\n\r\n" + responseString.length() + "\r\n\r\n" + responseString;
-                    } else {
-                        responseMessage = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\n\r\n";
-                    }
+                    String body = request.uri().getPath().split("/")[2];
+                    byte[] compressedData = compressedString(body);
+                    responseMessage =
+                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: "
+                            + compressedData.length + "\r\n\r\n";
+                    outWriter.write(responseMessage.getBytes());
+                    outWriter.write(compressedData);
                     isResponseConstructed = true;
+                    isResponded = true;
                 }
             }
             if (!isResponseConstructed) {
@@ -90,7 +97,9 @@ public class Main {
         } else {
             responseMessage = "HTTP/1.1 404 Not Found\r\n\r\n";
         }
-        outWriter.write(responseMessage.getBytes());
+        if(!isResponded) {
+            outWriter.write(responseMessage.getBytes());
+        }
         outWriter.flush();
         System.out.println("Response returned: " + responseMessage);
     }
@@ -199,5 +208,13 @@ public class Main {
             System.out.println("Failed to read file: " + e.getMessage());
             return null;
         }
+    }
+
+    private static byte[] compressedString(String str) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzip = new GZIPOutputStream(baos)) {
+            gzip.write(str.getBytes(StandardCharsets.UTF_8));
+        }
+        return baos.toByteArray();
     }
 }
