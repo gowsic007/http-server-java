@@ -50,58 +50,62 @@ public class Main {
     }
 
     private static void processRequestResponse(Socket socket, String[] args) throws IOException, URISyntaxException {
-        System.out.println("Processing request");
-        // Reading the request
-        String requestMessage = readRequest(socket.getInputStream());
-        System.out.println("Request message: " + requestMessage);
+        while (true) {
 
-        // Setting the output stream
-        OutputStream outWriter = socket.getOutputStream();
+            System.out.println("Processing request");
 
-        HttpRequest request = parseRequest(socket, requestMessage);
+            // Reading the request
+            String requestMessage = readRequest(socket.getInputStream());
+            System.out.println("Request message: " + requestMessage);
 
-        // Writing the response
-        String responseMessage = "";
-        boolean isResponded = false;
-        if (request.uri().getPath().equals("/") || request.uri().getPath().equals("/index.html")) {
-            responseMessage = "HTTP/1.1 200 OK\r\n\r\n";
-        } else if (request.uri().getPath().startsWith("/echo")) {
-            boolean isResponseConstructed = false;
-            if (request.headers().firstValue("Accept-Encoding").isPresent() && !isResponseConstructed) {
-                Set<String> acceptEncoding = Arrays.stream(
-                        request.headers().firstValue("Accept-Encoding").get().split(","))
-                    .map(encodeType -> encodeType.trim()).collect(Collectors.toSet());
-                if (acceptEncoding.contains("gzip")) {
-                    String body = request.uri().getPath().split("/")[2];
-                    byte[] compressedData = compressedString(body);
-                    responseMessage =
-                        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: "
-                            + compressedData.length + "\r\n\r\n";
-                    outWriter.write(responseMessage.getBytes());
-                    outWriter.write(compressedData);
-                    isResponseConstructed = true;
-                    isResponded = true;
+            // Setting the output stream
+            OutputStream outWriter = socket.getOutputStream();
+
+            HttpRequest request = parseRequest(socket, requestMessage);
+
+            // Writing the response
+            String responseMessage = "";
+            boolean isResponded = false;
+            if (request.uri().getPath().equals("/") || request.uri().getPath().equals("/index.html")) {
+                responseMessage = "HTTP/1.1 200 OK\r\n\r\n";
+            } else if (request.uri().getPath().startsWith("/echo")) {
+                boolean isResponseConstructed = false;
+                if (request.headers().firstValue("Accept-Encoding").isPresent() && !isResponseConstructed) {
+                    Set<String> acceptEncoding = Arrays.stream(
+                            request.headers().firstValue("Accept-Encoding").get().split(","))
+                        .map(encodeType -> encodeType.trim()).collect(Collectors.toSet());
+                    if (acceptEncoding.contains("gzip")) {
+                        String body = request.uri().getPath().split("/")[2];
+                        byte[] compressedData = compressedString(body);
+                        responseMessage =
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Encoding: gzip\r\nContent-Length: "
+                                + compressedData.length + "\r\n\r\n";
+                        outWriter.write(responseMessage.getBytes());
+                        outWriter.write(compressedData);
+                        isResponseConstructed = true;
+                        isResponded = true;
+                    }
                 }
+                if (!isResponseConstructed) {
+                    String responseString = request.uri().getPath().split("/")[2];
+                    responseMessage =
+                        getSuccessPrefix("text/plain") + responseString.length() + "\r\n\r\n" + responseString;
+                }
+            } else if (request.uri().getPath().startsWith("/user-agent")) {
+                System.out.println("User-Agent is: " + request.headers().map());
+                String userAgent = request.headers().firstValue("User-Agent").get();
+                responseMessage = getSuccessPrefix("text/plain") + userAgent.length() + "\r\n\r\n" + userAgent;
+            } else if (request.uri().getPath().startsWith("/files")) {
+                responseMessage = handleFileRequestAndGetResponse(request, requestMessage, args);
+            } else {
+                responseMessage = "HTTP/1.1 404 Not Found\r\n\r\n";
             }
-            if (!isResponseConstructed) {
-                String responseString = request.uri().getPath().split("/")[2];
-                responseMessage =
-                    getSuccessPrefix("text/plain") + responseString.length() + "\r\n\r\n" + responseString;
+            if (!isResponded) {
+                outWriter.write(responseMessage.getBytes());
             }
-        } else if (request.uri().getPath().startsWith("/user-agent")) {
-            System.out.println("User-Agent is: " + request.headers().map());
-            String userAgent = request.headers().firstValue("User-Agent").get();
-            responseMessage = getSuccessPrefix("text/plain") + userAgent.length() + "\r\n\r\n" + userAgent;
-        } else if (request.uri().getPath().startsWith("/files")) {
-            responseMessage = handleFileRequestAndGetResponse(request, requestMessage, args);
-        } else {
-            responseMessage = "HTTP/1.1 404 Not Found\r\n\r\n";
+            outWriter.flush();
+            System.out.println("Response returned: " + responseMessage);
         }
-        if(!isResponded) {
-            outWriter.write(responseMessage.getBytes());
-        }
-        outWriter.flush();
-        System.out.println("Response returned: " + responseMessage);
     }
 
     private static String handleFileRequestAndGetResponse(HttpRequest request, String requestMessage, String[] args) {
